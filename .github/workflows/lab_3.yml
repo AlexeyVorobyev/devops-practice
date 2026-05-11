@@ -1,0 +1,57 @@
+name: lab_3
+
+on:
+  push:
+    paths:
+      - "lab_3/**"
+      - ".github/workflows/lab_3.yml"
+  pull_request:
+    paths:
+      - "lab_3/**"
+      - ".github/workflows/lab_3.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile lab_3 Python files
+        run: python3 -m py_compile lab_3/dags/compute_metrics_spark_dag.py lab_3/spark/compute_metrics_spark.py
+
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    if: ${{ (github.event_name == 'push' && !startsWith(github.ref_name, 'feature/')) || (github.event_name == 'pull_request' && !startsWith(github.head_ref, 'feature/')) }}
+    defaults:
+      run:
+        working-directory: lab_3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Airflow image for lab_3
+        run: docker build -t lab3-airflow-ci .
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    if: ${{ github.event_name == 'push' && (github.ref_name == 'main' || github.ref_name == 'master' || github.ref_name == 'develop') }}
+    defaults:
+      run:
+        working-directory: lab_3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Start lab_3 compose stack
+        run: docker compose up -d
+
+      - name: Show lab_3 compose status
+        run: docker compose ps
